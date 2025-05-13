@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "Hide Members-Only Videos on YouTube",
+  "version": "1.1.0",
+  "description": "One-click toggle to hide or show Members-only uploads.",
+  "permissions": ["storage"],
+  "host_permissions": ["*://www.youtube.com/*"],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Hide Members-only videos (ON)",
+    "default_icon": {
+      "16": "icons/16.png",
+      "32": "icons/32.png",
+      "48": "icons/48.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://www.youtube.com/*"],
+      "js": ["hide-members.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "16": "icons/16.png",
+    "32": "icons/32.png",
+    "48": "icons/48.png",
+    "128": "icons/128.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "icons/16-off.png",
+        "icons/32-off.png",
+        "icons/48-off.png"
+      ],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}
