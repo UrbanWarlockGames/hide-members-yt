@@ -1,9 +1,3 @@
-/* ─────────────────────────────────────────────────────────────────────
-   hide-members.js – content script                  v1.3.0
-   Fully bi-directional toggle: hide + restore Members-only videos
-   © 2025 Your-Name — MIT Licence
-   ──────────────────────────────────────────────────────────────────── */
-
 /* 1 ▸ CONSTANTS ───────────────────────────────────────────────────── */
 
 const BADGE_SELECTOR =
@@ -28,10 +22,12 @@ const WRAPPER_SELECTOR =
 /** Hide every Members-only wrapper inside *scope*. */
 function hideMembersOnly(scope = document) {
   scope.querySelectorAll(BADGE_SELECTOR).forEach(badge => {
-    const genuine =
-      badge.classList.contains('badge-style-type-members-only') ||
-      badge.getAttribute('aria-label') === 'Members only' ||
-      badge.textContent?.trim() === 'Members only';
+	const badgeText = badge.textContent?.trim();
+	const genuine =
+	  badge.classList.contains('badge-style-type-members-only') ||
+	  badge.getAttribute('aria-label') === 'Members only' ||
+	  badgeText === 'Members only' ||
+	  badgeText === 'Members first';
 
     if (!genuine) return;
 

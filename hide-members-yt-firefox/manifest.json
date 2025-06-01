@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Hide Members-Only Videos on YouTube",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "One-click toggle to hide or show Members-only uploads on YouTube.",
 
   "permissions": ["storage"],
