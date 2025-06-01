@@ -1,5 +1,3 @@
-// background.js  ©2025 You — MIT
-
 const ON  = {16: 'icons/16.png',  32: 'icons/32.png',  48: 'icons/48.png'};
 const OFF = {16: 'icons/16-off.png', 32: 'icons/32-off.png', 48: 'icons/48-off.png'};
 
