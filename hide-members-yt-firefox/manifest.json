@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Hide Members-Only Videos on YouTube",
-  "version": "1.4.0",
+  "version": "1.6.1",
   "description": "One-click toggle to hide or show Members-only uploads on YouTube.",
 
   "permissions": ["storage"],
@@ -50,7 +50,10 @@
   "browser_specific_settings": {
     "gecko": {
       "id": "{77022f90-23b3-4ecc-95a6-95f7dce242c5}",
-      "strict_min_version": "112.0"
+      "strict_min_version": "112.0",
+      "data_collection_permissions": {
+        "required": ["none"]
+      }
     }
   }
 }

@@ -1,15 +1,21 @@
-/* 1 ▸ CONSTANTS ───────────────────────────────────────────────────── */
+/* 1 ▸ CONSTANTS */
 
 const BADGE_SELECTOR =
-  '.badge-style-type-members-only,' +
-  'ytd-badge-supported-renderer[aria-label="Members only"],' +
-  'p.style-scope.ytd-badge-supported-renderer';
+  '.badge.badge-style-type-members-only,' +
+  '.badge[aria-label*="Members" i],' +
+  'ytd-badge-supported-renderer .badge-style-type-members-only,' +
+  'ytd-badge-supported-renderer .badge[aria-label*="Members" i],' +
+  'p.style-scope.ytd-badge-supported-renderer,' +
+  '.badge-shape-wiz__text,' +
+  '.yt-badge-shape__text';
 
 const MEDIA_SELECTOR = [
   'ytd-rich-grid-media',
   'ytd-video-renderer',
   'ytd-compact-video-renderer',
-  'ytd-grid-video-renderer'
+  'ytd-grid-video-renderer',
+  'yt-lockup-view-model',
+  'ytd-reel-item-renderer'
 ].join(',');
 
 const WRAPPER_SELECTOR =
@@ -17,92 +23,172 @@ const WRAPPER_SELECTOR =
   'ytd-rich-grid-row,' +
   MEDIA_SELECTOR;
 
-/* 2 ▸ CORE ACTIONS ───────────────────────────────────────────────── */
+// Text patterns that indicate members-only content
+const MEMBERS_TEXT_PATTERNS = [
+  /members\s*only/i,
+  /members\s*first/i,
+  /for\s+members/i,
+  /available\s+to\s+members/i
+];
 
-/** Hide every Members-only wrapper inside *scope*. */
-function hideMembersOnly(scope = document) {
-  scope.querySelectorAll(BADGE_SELECTOR).forEach(badge => {
-	const badgeText = badge.textContent?.trim();
-	const genuine =
-	  badge.classList.contains('badge-style-type-members-only') ||
-	  badge.getAttribute('aria-label') === 'Members only' ||
-	  badgeText === 'Members only' ||
-	  badgeText === 'Members first';
+/* 2 ▸ HELPERS */
 
-    if (!genuine) return;
+function isMembersBadge(node) {
+  const text = (node.textContent || '').trim();
+  const label = (node.getAttribute && node.getAttribute('aria-label')) || '';
 
-    const wrapper =
-      badge.closest('ytd-rich-item-renderer') ||
-      badge.closest('ytd-rich-grid-row') ||
-      badge.closest(MEDIA_SELECTOR);
+  if (node.classList && node.classList.contains('badge-style-type-members-only')) return true;
+  if (label && MEMBERS_TEXT_PATTERNS.some(rx => rx.test(label))) return true;
+  if (text && MEMBERS_TEXT_PATTERNS.some(rx => rx.test(text))) return true;
 
-    if (wrapper && !wrapper.dataset.membersHidden) {
-      /* Remember original display so we can restore it faithfully. */
-      wrapper.dataset.originalDisplay = wrapper.style.display || '';
-      wrapper.style.display = 'none';
-      wrapper.dataset.membersHidden = 'true';
-    }
-  });
+  return false;
 }
 
-/** Undo every previous hide so the grid looks as if nothing happened. */
+function hideWrapper(wrapper) {
+  if (!wrapper || wrapper.dataset.membersHidden) return;
+  wrapper.dataset.originalDisplay = wrapper.style.display || '';
+  wrapper.style.display = 'none';
+  wrapper.dataset.membersHidden = 'true';
+}
+
+function findWrapper(badge) {
+  let wrapper =
+    badge.closest('ytd-rich-item-renderer') ||
+    badge.closest('ytd-rich-grid-row') ||
+    badge.closest(MEDIA_SELECTOR);
+
+  if (!wrapper) wrapper = badge.closest('yt-lockup-view-model');
+  if (!wrapper) wrapper = badge.closest('#contents > *');
+
+  return wrapper;
+}
+
+function hideMembersOnly(scope = document) {
+  const root = scope.nodeType === 1 || scope.shadowRoot ? scope : document;
+  const searchRoot = root.shadowRoot || root;
+  const badges = searchRoot.querySelectorAll(BADGE_SELECTOR);
+
+  for (const badge of badges) {
+    if (!isMembersBadge(badge)) continue;
+    const wrapper = findWrapper(badge);
+    hideWrapper(wrapper);
+  }
+}
+
 function revealAll() {
   document.querySelectorAll('[data-membersHidden="true"]').forEach(el => {
-    el.style.display = el.dataset.originalDisplay;
+    el.style.display = el.dataset.originalDisplay || '';
     el.removeAttribute('data-membersHidden');
-    el.removeAttribute('data-original-display');
+    el.removeAttribute('data-originalDisplay');
   });
 }
 
-/* 3 ▸ TOGGLE MACHINERY ───────────────────────────────────────────── */
+function injectCSSOnce() {
+  if (document.getElementById('members-only-hide-style')) return;
+  if (!(window.CSS && CSS.supports && CSS.supports('selector(:has(*))'))) return;
 
-let enabled  = true;   // until we read storage
-let observer = null;   // MutationObserver handle
+  // Only target the old dedicated members-only badge class
+  const css = `
+    ytd-rich-grid-media:has(.badge-style-type-members-only),
+    ytd-video-renderer:has(.badge-style-type-members-only),
+    ytd-compact-video-renderer:has(.badge-style-type-members-only),
+    ytd-grid-video-renderer:has(.badge-style-type-members-only),
+    yt-lockup-view-model:has(.badge-style-type-members-only),
+    ytd-reel-item-renderer:has(.badge-style-type-members-only) {
+      display: none !important;
+    }
+  `;
+
+  const style = document.createElement('style');
+  style.id = 'members-only-hide-style';
+  style.textContent = css;
+  document.documentElement.appendChild(style);
+}
+
+/* 3 ▸ TOGGLE MACHINERY */
+
+let enabled = true;
+let observer = null;
 
 function start() {
-  if (observer) return;           // already active
+  if (observer) return;
+
+  injectCSSOnce();
   hideMembersOnly();
-  observer = new MutationObserver(m => {
-    m.forEach(rec =>
-      rec.addedNodes.forEach(n =>
-        n.nodeType === 1 && hideMembersOnly(n)
-      )
-    );
+
+  observer = new MutationObserver(mutations => {
+    for (const m of mutations) {
+      if (m.type === 'childList') {
+        for (const node of m.addedNodes) {
+          if (!node || node.nodeType !== 1) continue;
+
+          const localScope =
+            (node.closest && (node.closest(WRAPPER_SELECTOR) || node)) || node;
+
+          hideMembersOnly(localScope);
+
+          if (node.shadowRoot) hideMembersOnly(node.shadowRoot);
+        }
+      } else if (m.type === 'attributes' || m.type === 'characterData') {
+        const el = m.target.nodeType === 3 ? m.target.parentElement : m.target;
+        if (!el) continue;
+
+        const scope =
+          (el.closest && (el.closest(WRAPPER_SELECTOR) || el)) ||
+          document;
+
+        hideMembersOnly(scope);
+
+        if (el.shadowRoot) hideMembersOnly(el.shadowRoot);
+      }
+    }
   });
-  observer.observe(document, { childList: true, subtree: true });
+
+  observer.observe(document, {
+    childList: true,
+    subtree: true,
+    characterData: true,
+    attributes: true,
+    attributeFilter: ['aria-label', 'hidden', 'class']
+  });
 }
 
 function stop() {
-  observer?.disconnect();
+  if (observer) observer.disconnect();
   observer = null;
   revealAll();
 }
 
-/* 3a ▸ sync with stored flag once at load. */
-chrome.storage.local.get('enabled').then(({ enabled: stored }) => {
-  enabled = stored !== false;     // undefined ⇒ true
-  enabled ? start() : stop();
-});
+try {
+  chrome.storage.local.get('enabled').then(({ enabled: stored }) => {
+    enabled = stored !== false;
+    enabled ? start() : stop();
+  });
+} catch (e) {
+  enabled = true;
+  start();
+}
 
-/* 3b ▸ react to every subsequent change (set in background.js). */
-chrome.storage.onChanged.addListener((changes, area) => {
+chrome.storage.onChanged?.addListener((changes, area) => {
   if (area !== 'local' || !changes.enabled) return;
   const newVal = changes.enabled.newValue !== false;
-  if (newVal === enabled) return; // no-op
+  if (newVal === enabled) return;
 
   enabled = newVal;
   enabled ? start() : stop();
 });
 
-/* 3c ▸ instant reaction to live broadcast from background.js */
-chrome.runtime.onMessage.addListener(({ enabled: flag }) => {
+chrome.runtime.onMessage?.addListener(({ enabled: flag }) => {
   if (typeof flag !== 'boolean' || flag === enabled) return;
   enabled = flag;
   enabled ? start() : stop();
 });
 
-/* 4 ▸ SPA NAVIGATION SUPPORT ─────────────────────────────────────── */
+/* 4 ▸ SPA NAVIGATION SUPPORT */
 
 window.addEventListener('yt-navigate-finish', () => {
-  if (enabled) setTimeout(hideMembersOnly, 0);
+  if (!enabled) return;
+  queueMicrotask(() => hideMembersOnly());
+  setTimeout(hideMembersOnly, 250);
+  setTimeout(hideMembersOnly, 1500);
 });
