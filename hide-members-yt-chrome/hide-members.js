@@ -1,11 +1,18 @@
 /* 1 ▸ CONSTANTS */
 
 const BADGE_SELECTOR =
+  /* legacy badges */
   '.badge.badge-style-type-members-only,' +
   '.badge[aria-label*="Members" i],' +
   'ytd-badge-supported-renderer .badge-style-type-members-only,' +
   'ytd-badge-supported-renderer .badge[aria-label*="Members" i],' +
   'p.style-scope.ytd-badge-supported-renderer,' +
+
+  /* new layout badges */
+  'yt-badge-view-model badge-shape,' +
+  'yt-badge-view-model .yt-badge-shape__text,' +
+
+  /* existing generic fallbacks */
   '.badge-shape-wiz__text,' +
   '.yt-badge-shape__text';
 
@@ -34,6 +41,17 @@ const MEMBERS_TEXT_PATTERNS = [
 /* 2 ▸ HELPERS */
 
 function isMembersBadge(node) {
+  /* new layout: structural detection */
+  if (
+    node.closest &&
+    node.closest('yt-badge-view-model')
+  ) {
+    const text = (node.textContent || '').trim();
+    if (text && MEMBERS_TEXT_PATTERNS.some(rx => rx.test(text))) {
+      return true;
+    }
+  }
+
   const text = (node.textContent || '').trim();
   const label = (node.getAttribute && node.getAttribute('aria-label')) || '';
 
@@ -53,11 +71,12 @@ function hideWrapper(wrapper) {
 
 function findWrapper(badge) {
   let wrapper =
+    /* new layout first */
+    badge.closest('yt-lockup-view-model') ||
     badge.closest('ytd-rich-item-renderer') ||
     badge.closest('ytd-rich-grid-row') ||
     badge.closest(MEDIA_SELECTOR);
 
-  if (!wrapper) wrapper = badge.closest('yt-lockup-view-model');
   if (!wrapper) wrapper = badge.closest('#contents > *');
 
   return wrapper;
@@ -87,14 +106,17 @@ function injectCSSOnce() {
   if (document.getElementById('members-only-hide-style')) return;
   if (!(window.CSS && CSS.supports && CSS.supports('selector(:has(*))'))) return;
 
-  // Only target the old dedicated members-only badge class
   const css = `
+    /* legacy layout */
     ytd-rich-grid-media:has(.badge-style-type-members-only),
     ytd-video-renderer:has(.badge-style-type-members-only),
     ytd-compact-video-renderer:has(.badge-style-type-members-only),
     ytd-grid-video-renderer:has(.badge-style-type-members-only),
     yt-lockup-view-model:has(.badge-style-type-members-only),
-    ytd-reel-item-renderer:has(.badge-style-type-members-only) {
+    ytd-reel-item-renderer:has(.badge-style-type-members-only),
+
+    /* new layout */
+    yt-lockup-view-model:has(yt-badge-view-model .yt-badge-shape__text) {
       display: none !important;
     }
   `;
@@ -164,7 +186,7 @@ try {
     enabled = stored !== false;
     enabled ? start() : stop();
   });
-} catch (e) {
+} catch {
   enabled = true;
   start();
 }
